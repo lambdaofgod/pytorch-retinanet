@@ -2,7 +2,7 @@ import argparse
 import collections
 
 import numpy as np
-
+import tqdm
 import torch
 import torch.optim as optim
 from torchvision import transforms
@@ -40,9 +40,9 @@ def main(args=None):
         if parser.coco_path is None:
             raise ValueError('Must provide --coco_path when training on COCO,')
 
-        dataset_train = CocoDataset(parser.coco_path, set_name='train2017',
+        dataset_train = CocoDataset(parser.coco_path, set_name='train',
                                     transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
-        dataset_val = CocoDataset(parser.coco_path, set_name='val2017',
+        dataset_val = CocoDataset(parser.coco_path, set_name='val',
                                   transform=transforms.Compose([Normalizer(), Resizer()]))
 
     elif parser.dataset == 'csv':
@@ -112,13 +112,15 @@ def main(args=None):
     print('Num training images: {}'.format(len(dataset_train)))
 
     for epoch_num in range(parser.epochs):
-
+        print('Epoch {}'.format(epoch_num))
         retinanet.train()
         retinanet.module.freeze_bn()
 
         epoch_loss = []
 
-        for iter_num, data in enumerate(dataloader_train):
+        pbar = tqdm.tqdm(enumerate(dataloader_train), total=len(dataloader_train))
+        for i, data in pbar:
+            pbar.update(i)
             try:
                 optimizer.zero_grad()
 
@@ -145,10 +147,10 @@ def main(args=None):
 
                 epoch_loss.append(float(loss))
 
-                print(
-                    'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
-                        epoch_num, iter_num, float(classification_loss), float(regression_loss), np.mean(loss_hist)))
-
+                msg = (
+                    'Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
+                        float(classification_loss), float(regression_loss), np.mean(loss_hist)))
+                pbar.set_description(msg)
                 del classification_loss
                 del regression_loss
             except Exception as e:
